@@ -268,6 +268,7 @@ void softmax_x_ent_cpu(int n, float *pred, float *truth, float *delta, float *er
     for(i = 0; i < n; ++i){
         float t = truth[i];
         float p = pred[i];
+        // below is for multiclass classification, note that when in binary classification, error should be simply zero ..
         error[i] = (t) ? -log(p) : 0;
         delta[i] = t-p;
     }

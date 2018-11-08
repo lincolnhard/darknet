@@ -68,6 +68,12 @@ void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
         float BETA,
         float *C, int ldc)
 {
+    // TA: if A needs to transpose
+    // TB: if B needs to transpose
+    // lda: A's cols (if TA = 1, lda is transpose A's rows)
+    // ldb: B's cols (if TB = 1, ldb is transpose B's rows)
+    // ldc: C's cols
+    // C_gpu += ALPHA * A_gpu * B_gpu + BETA * C_gpu
     gemm_cpu( TA,  TB,  M, N, K, ALPHA,A,lda, B, ldb,BETA,C,ldc);
 }
 

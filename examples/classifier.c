@@ -21,8 +21,8 @@ void train_classifier(char *datacfg, char *cfgfile, char *weightfile, int *gpus,
 
     float avg_loss = -1;
     char *base = basecfg(cfgfile);
-    printf("%s\n", base);
-    printf("%d\n", ngpus);
+    printf("weight name: %s\n", base);
+    printf("num of gpus: %d\n", ngpus);
     network **nets = calloc(ngpus, sizeof(network*));
 
     srand(time(0));
@@ -57,7 +57,7 @@ void train_classifier(char *datacfg, char *cfgfile, char *weightfile, int *gpus,
     }
     list *plist = get_paths(train_list);
     char **paths = (char **)list_to_array(plist);
-    printf("%d\n", plist->size);
+    printf("num of training samples: %d\n", plist->size);
     int N = plist->size;
     double time;
 
@@ -69,7 +69,7 @@ void train_classifier(char *datacfg, char *cfgfile, char *weightfile, int *gpus,
 
     args.min = net->min_ratio*net->w;
     args.max = net->max_ratio*net->w;
-    printf("%d %d\n", args.min, args.max);
+    //printf("%d %d\n", args.min, args.max);
     args.angle = net->angle;
     args.aspect = net->aspect;
     args.exposure = net->exposure;
@@ -85,7 +85,7 @@ void train_classifier(char *datacfg, char *cfgfile, char *weightfile, int *gpus,
     if (tag){
         args.type = TAG_DATA;
     } else {
-        args.type = CLASSIFICATION_DATA;
+        args.type = OLD_CLASSIFICATION_DATA;
     }
 
     data train;
@@ -126,7 +126,7 @@ void train_classifier(char *datacfg, char *cfgfile, char *weightfile, int *gpus,
         train = buffer;
         load_thread = load_data(args);
 
-        printf("Loaded: %lf seconds\n", what_time_is_it_now()-time);
+        printf("Batch samples loaded time: %lf seconds\n", what_time_is_it_now()-time);
         time = what_time_is_it_now();
 
         float loss = 0;
@@ -141,9 +141,10 @@ void train_classifier(char *datacfg, char *cfgfile, char *weightfile, int *gpus,
 #endif
         if(avg_loss == -1) avg_loss = loss;
         avg_loss = avg_loss*.9 + loss*.1;
-        printf("%ld, %.3f: %f, %f avg, %f rate, %lf seconds, %ld images\n", get_current_batch(net), (float)(*net->seen)/N, loss, avg_loss, get_current_rate(net), what_time_is_it_now()-time, *net->seen);
+        printf("%ld, %.3f, current loss: %f, average loss: %f, learning rate: %f, training time: %lf seconds, %ld images\n", get_current_batch(net), (float)(*net->seen)/N, loss, avg_loss, get_current_rate(net), what_time_is_it_now()-time, *net->seen);
         free_data(train);
         if(*net->seen/N > epoch){
+            // save weight every epoch
             epoch = *net->seen/N;
             char buff[256];
             sprintf(buff, "%s/%s_%d.weights",backup_directory,base, epoch);

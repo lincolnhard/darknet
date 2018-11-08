@@ -442,6 +442,38 @@ void backward_bias(float *bias_updates, float *delta, int batch, int n, int size
     }
 }
 
+/*
+ *                                  ---------------
+ *                                 /              / |
+ *                                /              /  |
+ *                               ---------------    |
+ *                              |               |   |
+ *                              |               |   |
+ *                              |      in       |   |  ____
+ *                              |               |   |      |
+ *                              |               | /        |
+ *                              |               |/         | im2col()
+ *                               ---------------           |
+ *                                                         |
+ * //////////////////////////////////////////////////      |
+ *                                                         |
+ *                                         gemm()          |
+ *                                                         v
+ *                      weight length (K)        ------------------------------
+ *                     -------------------      |                              |
+ *                    |                   |     |                              |
+ * num of filters (M) |                   |  *  |                              |
+ *                    |                   |     |                              |
+ *                     -------------------      |                              | weight length (K)
+ *                                              |                              |
+ *                                              |                              |
+ *                                              |                              |
+ *                                              |                              |
+ *                                               ------------------------------
+ *                                                    output plane size (N)
+ */
+
+
 void forward_convolutional_layer(convolutional_layer l, network net)
 {
     int i, j;
@@ -463,7 +495,7 @@ void forward_convolutional_layer(convolutional_layer l, network net)
             float *a = l.weights + j*l.nweights/l.groups;
             float *b = net.workspace;
             float *c = l.output + (i*l.groups + j)*n*m;
-            float *im =  net.input + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
+            float *im = net.input + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
 
             if (l.size == 1) {
                 b = im;
@@ -491,6 +523,7 @@ void backward_convolutional_layer(convolutional_layer l, network net)
     int n = l.size*l.size*l.c/l.groups;
     int k = l.out_w*l.out_h;
 
+    // complete current layer delta calculation
     gradient_array(l.output, l.outputs*l.batch, l.activation, l.delta);
 
     if(l.batch_normalize){
@@ -505,18 +538,22 @@ void backward_convolutional_layer(convolutional_layer l, network net)
             float *b = net.workspace;
             float *c = l.weight_updates + j*l.nweights/l.groups;
 
-            float *im  = net.input + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
+            float *im = net.input + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
             float *imd = net.delta + (i*l.groups + j)*l.c/l.groups*l.h*l.w;
 
             if(l.size == 1){
                 b = im;
             } else {
-                im2col_cpu(im, l.c/l.groups, l.h, l.w, 
-                        l.size, l.stride, l.pad, b);
+                im2col_cpu(im, l.c/l.groups, l.h, l.w, l.size, l.stride, l.pad, b);
             }
 
+            // a: (l.out_c) * (l.out_h*l*out_w)
+            // b: (l.c * l.size * l.size) * (l.out_h * l.out_w)
+            // c: (l.n) * (l.c*l.size*l.size)
+            // b needs to transpose to match matrix multiplication
             gemm(0,1,m,n,k,1,a,k,b,k,1,c,n);
 
+            // get previous layer's delta (partially, not until it times derivatives of activation)
             if (net.delta) {
                 a = l.weights + j*l.nweights/l.groups;
                 b = l.delta + (i*l.groups + j)*m*k;
