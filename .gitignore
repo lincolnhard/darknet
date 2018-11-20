@@ -5,6 +5,8 @@
 *.png
 *.jpg
 *.pyc
+*.so
+*.a
 old/
 mnist/
 data/
@@ -15,8 +17,8 @@ opencv/
 convnet/
 decaf/
 submission/
-cfg/
 darknet
+backup/
 .fuse*
 
 # OS Generated #

@@ -730,6 +730,7 @@ void fill_image(image m, float s);
 image grayscale_image(image im);
 void rotate_image_cw(image im, int times);
 double what_time_is_it_now();
+void replace_image_to_label(char *input_path, char *output_path);
 image rotate_image(image m, float rad);
 void visualize_network(network *net);
 float box_iou(box a, box b);

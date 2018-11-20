@@ -1,0 +1,6 @@
+classes=10
+train  = /media/lincolnhard/LHDISK1T/cifar/train.list
+valid  = /media/lincolnhard/LHDISK1T/cifar/test.list
+labels = /media/lincolnhard/LHDISK1T/cifar/labels.txt
+backup = backup/
+top=2
