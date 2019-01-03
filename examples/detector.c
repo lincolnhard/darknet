@@ -846,6 +846,73 @@ void validate_detector_map(char *datacfg, char *cfgfile, char *weightfile)
     free(truth_classes_count);
 }
 
+void fuse_conv_batchnorm(network *net)
+{
+    int j;
+    for (j = 0; j < net->n; ++j) {
+        layer *l = &net->layers[j];
+
+        if (l->type == CONVOLUTIONAL) {
+            //printf(" Merges Convolutional-%d and batch_norm \n", j);
+
+            if (l->batch_normalize) {
+                int f;
+                for (f = 0; f < l->n; ++f)
+                {
+                    l->biases[f] = l->biases[f] - (double)l->scales[f] * l->rolling_mean[f] / (sqrt((double)l->rolling_variance[f]) + .000001f);
+
+                    const size_t filter_size = l->size*l->size*l->c;
+                    int i;
+                    for (i = 0; i < filter_size; ++i) {
+                        int w_index = f*filter_size + i;
+
+                        l->weights[w_index] = (double)l->weights[w_index] * l->scales[f] / (sqrt((double)l->rolling_variance[f]) + .000001f);
+                    }
+                }
+
+                l->batch_normalize = 0;
+#ifdef GPU
+                if (gpu_index >= 0) {
+                    push_convolutional_layer(*l);
+                }
+#endif
+            }
+        }
+        else {
+            //printf(" Fusion skip layer type: %d \n", l->type);
+        }
+    }
+}
+
+void merge_detector_weights(char *datacfg, char *cfgfile, char *weightfile)
+{
+    list *options = read_data_cfg(datacfg);
+    char *name_list = option_find_str(options, "names", "data/names.list");
+    char **names = get_labels(name_list);
+    image **alphabet = load_alphabet();
+    network *net = load_network(cfgfile, weightfile, 0);
+    fuse_conv_batchnorm(net);
+    char tempbuf[64];
+    save_weights(net, "nonobn.weights");
+    FILE *fpdst = fopen("nonobn.cfg", "w");
+    FILE *fpsrc = fopen(cfgfile, "r");
+    char txtbuf[128];
+    while (fgets(txtbuf, 120, fpsrc) != NULL)
+        {
+        if (strcmp(txtbuf, "batch_normalize=1\n") == 0 ||
+                strcmp(txtbuf, "batch_normalize = 1\n") == 0)
+            {
+            continue;
+            }
+        else
+            {
+            fputs(txtbuf, fpdst);
+            }
+        }
+    fclose(fpsrc);
+    fclose(fpdst);
+}
+
 void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile, int fullscreen)
 {
     list *options = read_data_cfg(datacfg);
@@ -854,6 +921,7 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 
     image **alphabet = load_alphabet();
     network *net = load_network(cfgfile, weightfile, 0);
+    fuse_conv_batchnorm(net);
     set_batch_network(net, 1);
     srand(2222222);
     double time;
@@ -1129,6 +1197,7 @@ void run_detector(int argc, char **argv)
     else if(0==strcmp(argv[2], "valid2")) validate_detector_flip(datacfg, cfg, weights, outfile);
     else if(0==strcmp(argv[2], "recall")) validate_detector_recall(cfg, weights);
     else if(0==strcmp(argv[2], "map")) validate_detector_map(datacfg, cfg, weights);
+    else if(0==strcmp(argv[2], "merge")) merge_detector_weights(datacfg, cfg, weights);
     else if(0==strcmp(argv[2], "demo")) {
         list *options = read_data_cfg(datacfg);
         int classes = option_find_int(options, "classes", 20);
